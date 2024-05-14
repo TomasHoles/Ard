@@ -1,0 +1,116 @@
+#include <Arduino.h>
+#include <IRremote.hpp>
+
+#define IR_RECEIVE_PIN 12
+#define enter 4127850240 // Enter key code
+#define redPin 3
+#define greenPin 5
+#define bluePin 6
+String stringNum;
+
+int bar[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11}; // LED bar pins
+unsigned long codes[] =                       // Key codes
+    {
+        3910598400, // 0
+        4077715200, // 1
+        3877175040, // 2
+        2707357440, // 3
+        4144561920, // 4
+        3810328320, // 5
+        2774204160, // 6
+        3175284480, // 7
+        2907897600, // 8
+        3041591040, // 9
+};
+int codesSize = sizeof(codes) / sizeof(codes[0]); // Number of elements in codes array
+int barSize = sizeof(bar) / sizeof(bar[0]);       // Number of elements in bar array
+
+void barOff()
+{ // Turn off all LEDs
+  for (int i = 0; i < barSize; i++)
+  {
+    digitalWrite(bar[i], LOW);
+  }
+}
+
+void setRGBIntensity(int redIntensity, int greenIntensity, int blueIntensity)
+{
+  analogWrite(redPin, redIntensity);
+  analogWrite(greenPin, greenIntensity);
+  analogWrite(bluePin, blueIntensity);
+}
+
+String receivedNum(unsigned long irData) // Get the number of the key pressed
+{
+  for (int i = 0; i < codesSize; i++) // loop through codes array, if matches return the corresponding number
+  {
+    if (irData == codes[i])
+    {
+      return String(i);
+    }
+  }
+}
+
+void setup()
+{
+  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK); // Initialize IR receiver
+  Serial.begin(9600);                                    // Initialize serial communication
+  for (int i = 0; i < barSize; i++)
+  {
+    pinMode(bar[i], OUTPUT);
+  }
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin, OUTPUT);
+
+  // Set default intensity for each LED
+  int defaultIntensity = 128; // Adjust this value as needed
+  setRGBIntensity(defaultIntensity, defaultIntensity, defaultIntensity);
+}
+
+void loop()
+{
+  if (IrReceiver.decode()) // Check if data is received from IR receiver
+  {
+    unsigned long irData = IrReceiver.decodedIRData.decodedRawData; // Save IR code
+    if (irData > 0)                                                 // Check for false codes
+    {
+      Serial.print(irData); // Print code to serial
+      Serial.print(",");
+      if (irData == enter) // If enter is pressed, set RGB intensity
+      {
+        int redIntensity = stringNum.toInt(); // Convert String to int
+        if (redIntensity <= 255)              // Check input range
+        {
+          Serial.println("Enter green intensity (0-255):");
+          while (!Serial.available()) // Wait for user input
+            ;
+          int greenIntensity = Serial.parseInt(); // Read user input for green intensity
+          Serial.println(greenIntensity);
+
+          Serial.println("Enter blue intensity (0-255):");
+          while (!Serial.available()) // Wait for user input
+            ;
+          int blueIntensity = Serial.parseInt(); // Read user input for blue intensity
+          Serial.println(blueIntensity);
+
+          setRGBIntensity(redIntensity, greenIntensity, blueIntensity);
+          stringNum = ""; // Clear stored number
+        }
+        else
+        {
+          Serial.println("Out of range");
+          stringNum = ""; // Clear stored num
+        }
+      }
+      else // accumulate numbers
+      {
+        stringNum = stringNum + receivedNum(irData);
+        Serial.println(stringNum);
+      }
+    }
+
+    IrReceiver.resume(); // Enable receiving of the next value
+  }
+}
+
